@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Guardrail — AI Token Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: .25rem; }
+    .subtitle { color: #94a3b8; font-size: .875rem; margin-bottom: 2rem; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .card {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    .card .label {
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #64748b;
+      margin-bottom: .5rem;
+    }
+    .card .value {
+      font-size: 1.75rem;
+      font-weight: 600;
+      font-family: 'Courier New', monospace;
+    }
+    .value.warn   { color: #f59e0b; }
+    .value.danger { color: #ef4444; }
+    .value.good   { color: #10b981; }
+
+    .budget-card {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .budget-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: .75rem;
+    }
+    .budget-title { font-weight: 500; }
+    .budget-pct   { font-family: monospace; font-size: .875rem; color: #94a3b8; }
+    .bar-track {
+      height: 10px;
+      background: #2d3148;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 10px;
+      border-radius: 5px;
+      transition: width .4s;
+    }
+    .bar-fill.good   { background: #10b981; }
+    .bar-fill.warn   { background: #f59e0b; }
+    .bar-fill.danger { background: #ef4444; }
+    .bar-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: .7rem;
+      color: #475569;
+      margin-top: .4rem;
+    }
+
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    .panel-title {
+      font-size: .8rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #64748b;
+      margin-bottom: 1rem;
+    }
+
+    .calls-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+    .calls-table th {
+      text-align: left;
+      color: #475569;
+      font-weight: 500;
+      padding: .4rem .5rem;
+      border-bottom: 1px solid #2d3148;
+      font-size: .7rem;
+      text-transform: uppercase;
+    }
+    .calls-table td {
+      padding: .5rem;
+      border-bottom: 1px solid #1a1f2e;
+      color: #94a3b8;
+      font-family: monospace;
+    }
+    .calls-table tr:last-child td { border-bottom: none; }
+    .calls-table tr:hover td { background: #252940; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: .7rem;
+      font-weight: 500;
+    }
+    .badge-anthropic { background: #3b1f5e; color: #c084fc; }
+    .badge-openai    { background: #1a3a2a; color: #4ade80; }
+    .badge-gemini    { background: #1a2e4a; color: #60a5fa; }
+    .badge-mistral   { background: #3a2a10; color: #fbbf24; }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .6rem 0;
+      border-bottom: 1px solid #2d3148;
+      gap: 1rem;
+    }
+    .setting-row:last-child { border-bottom: none; }
+    .setting-label { font-size: .875rem; color: #cbd5e1; }
+    .setting-desc  { font-size: .7rem;   color: #475569; margin-top: 2px; }
+    .setting-input {
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      color: #e2e8f0;
+      padding: .3rem .6rem;
+      font-size: .875rem;
+      width: 100px;
+      text-align: right;
+      font-family: monospace;
+    }
+    .save-btn {
+      background: #6366f1;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: .3rem .75rem;
+      font-size: .8rem;
+      cursor: pointer;
+    }
+    .save-btn:hover { background: #4f46e5; }
+
+    .alert {
+      background: #2d1515;
+      border: 1px solid #7f1d1d;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: flex-start;
+      gap: .75rem;
+    }
+    .alert-icon  { font-size: 1.2rem; flex-shrink: 0; }
+    .alert-title { font-weight: 500; color: #fca5a5; font-size: .875rem; }
+    .alert-desc  { color: #f87171; font-size: .8rem; margin-top: 3px; }
+
+    .refresh-bar {
+      text-align: right;
+      font-size: .75rem;
+      color: #334155;
+      margin-bottom: 1rem;
+    }
+    .refresh-bar a { color: #6366f1; text-decoration: none; cursor: pointer; }
+
+    .empty-state {
+      color: #475569;
+      font-size: .875rem;
+      padding: 1rem 0;
+    }
+
+    .code-block {
+      background: #0f1117;
+      border-radius: 8px;
+      padding: .875rem;
+      font-family: monospace;
+      font-size: .75rem;
+      line-height: 1.9;
+      color: #64748b;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🛡 Guardrail</h1>
+  <p class="subtitle">AI token budget manager — real-time spend tracking across all providers</p>
+
+  <div class="refresh-bar">
+    Auto-refreshes every 10s &nbsp;·&nbsp;
+    <a onclick="location.reload()">Refresh now</a>
+  </div>
+
+  {% set pct = stats.spent_pct %}
+  {% set bar_class = 'danger' if pct >= 95 else ('warn' if pct >= 75 else 'good') %}
+  {% set val_class = 'danger' if pct >= 95 else ('warn' if pct >= 75 else 'good') %}
+
+  {% if pct >= 75 %}
+  <div class="alert">
+    <div class="alert-icon">🚨</div>
+    <div>
+      <div class="alert-title">
+        {% if pct >= 95 %}Hard kill threshold reached — all new requests are blocked!
+        {% else %}Pause threshold reached — new requests are paused{% endif %}
+      </div>
+      <div class="alert-desc">
+        You've used {{ pct }}% of your ${{ stats.budget_usd }} budget this month.
+        Update your limit below or wait until next month.
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">Spent this month</div>
+      <div class="value {{ val_class }}">${{ "%.4f" | format(stats.spent_usd) }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Monthly budget</div>
+      <div class="value">${{ "%.2f" | format(stats.budget_usd) }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Total tokens</div>
+      <div class="value">{{ "{:,}".format(stats.total_tokens) }}</div>
+    </div>
+    <div class="card">
+      <div class="label">API calls</div>
+      <div class="value good">{{ stats.call_count }}</div>
+    </div>
+  </div>
+
+  <div class="budget-card">
+    <div class="budget-header">
+      <span class="budget-title">Monthly budget usage</span>
+      <span class="budget-pct">{{ pct }}% used</span>
+    </div>
+    <div class="bar-track">
+      <div class="bar-fill {{ bar_class }}" style="width: {{ [pct, 100] | min }}%"></div>
+    </div>
+    <div class="bar-labels">
+      <span>$0</span>
+      <span style="color:#f59e0b">⚠ pause at {{ stats.config.get('pause_at_pct', 75) }}%</span>
+      <span style="color:#ef4444">✕ kill at {{ stats.config.get('kill_at_pct', 95) }}%</span>
+      <span>${{ stats.budget_usd }}</span>
+    </div>
+  </div>
+
+  <div class="grid2">
+
+    <div class="panel">
+      <div class="panel-title">Recent API calls</div>
+      {% if calls %}
+      <table class="calls-table">
+        <thead>
+          <tr>
+            <th>Provider</th>
+            <th>Model</th>
+            <th>In</th>
+            <th>Out</th>
+            <th>Cost</th>
+            <th>ms</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for call in calls %}
+          <tr>
+            <td><span class="badge badge-{{ call.provider }}">{{ call.provider }}</span></td>
+            <td>{{ call.model[:16] }}{% if call.model | length > 16 %}…{% endif %}</td>
+            <td>{{ "{:,}".format(call.input_tokens) }}</td>
+            <td>{{ "{:,}".format(call.output_tokens) }}</td>
+            <td>${{ "%.4f" | format(call.cost_usd) }}</td>
+            <td>{{ call.duration_ms }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty-state">No API calls yet. Make a request through the proxy to see it here.</p>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Budget limits</div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Monthly budget</div>
+          <div class="setting-desc">Total spend cap in USD</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="setting-input" id="budget" type="number"
+                 value="{{ stats.config.get('monthly_budget_usd', 500) }}"/>
+          <button class="save-btn" onclick="save('monthly_budget_usd','budget')">Save</button>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Pause at (%)</div>
+          <div class="setting-desc">Stop new requests at this %</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="setting-input" id="pause" type="number"
+                 value="{{ stats.config.get('pause_at_pct', 75) }}"/>
+          <button class="save-btn" onclick="save('pause_at_pct','pause')">Save</button>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Kill at (%)</div>
+          <div class="setting-desc">Hard-block everything at this %</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="setting-input" id="kill" type="number"
+                 value="{{ stats.config.get('kill_at_pct', 95) }}"/>
+          <button class="save-btn" onclick="save('kill_at_pct','kill')">Save</button>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Per-job token limit</div>
+          <div class="setting-desc">Max tokens any single job can use</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="setting-input" id="joblimit" type="number"
+                 value="{{ stats.config.get('per_job_token_limit', 500000) }}"/>
+          <button class="save-btn" onclick="save('per_job_token_limit','joblimit')">Save</button>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <span style="color:#475569"># Python — one line change</span><br/>
+        client = Anthropic(<br/>
+        &nbsp;&nbsp;<span style="color:#4ade80">base_url=<span style="color:#86efac">"http://localhost:4000/anthropic"</span></span><br/>
+        )<br/><br/>
+        <span style="color:#475569"># Tag a job to track it</span><br/>
+        extra_headers={<br/>
+        &nbsp;&nbsp;<span style="color:#86efac">"x-guardrail-job-id"</span>: <span style="color:#86efac">"pr-review"</span><br/>
+        }
+      </div>
+    </div>
+
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Daily spend — last 30 days</div>
+    {% if chart_labels %}
+    <canvas id="spendChart" height="80"></canvas>
+    {% else %}
+    <p class="empty-state">No spend data yet. Make some API calls through the proxy first.</p>
+    {% endif %}
+  </div>
+
+  <script>
+    async function save(key, inputId) {
+      const value = document.getElementById(inputId).value
+      await fetch('http://localhost:4000/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value })
+      })
+      location.reload()
+    }
+
+    setTimeout(() => location.reload(), 10000)
+
+    {% if chart_labels %}
+    const ctx = document.getElementById('spendChart').getContext('2d')
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: {{ chart_labels | tojson }},
+        datasets: [{
+          label: 'USD',
+          data: {{ chart_values | tojson }},
+          backgroundColor: '#6366f1',
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => '$' + ctx.raw.toFixed(4) } }
+        },
+        scales: {
+          x: { ticks: { color: '#475569' }, grid: { color: '#1e2130' } },
+          y: {
+            ticks: { color: '#475569', callback: v => '$' + v },
+            grid: { color: '#1e2130' }
+          }
+        }
+      }
+    })
+    {% endif %}
+  </script>
+
+</body>
+</html>
